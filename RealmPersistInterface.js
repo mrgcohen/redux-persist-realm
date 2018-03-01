@@ -17,32 +17,34 @@ class RealmPersistInterface {
     }
 
     getItem = (key, callback) => {
-        try {
-            const matches = this.items.filtered(`name = "${key}"`);
+        const promise = new Promise((resolve, reject) => {
+            try {
+                const matches = this.items.filtered(`name = "${key}"`);
 
-            if (matches.length > 0 && matches[0]) {
-                callback(null, matches[0].content);
-            } else {
-                throw new Error(`Could not get item with key: '${key}'`);
+                if (matches.length > 0 && matches[0]) {
+                    resolve(matches[0].content);
+                } else {
+                    reject(new Error(`Could not get item with key: '${key}'`));
+                }
+            } catch (error) {
+                reject(error);
             }
-        } catch (error) {
-            callback(error);
+        });
+
+        if (callback && typeof callback === 'function') {
+            promise
+                .then((content) => callback(null, content))
+                .catch((e) => callback(e));
         }
+   
+        return promise;
     };
 
     setItem = (key, value, callback) => {
-        try {
-            this.getItem(key, (error) => {
-                this.realm.write(() => {
-                    if (error) {
-                        this.realm.create(
-                            'Item',
-                            {
-                                name: key,
-                                content: value,
-                            }
-                        );
-                    } else {
+        const promise = new Promise((resolve, reject) => {
+            this.getItem(key).then(() => {
+                try {
+                    this.realm.write(() => {
                         this.realm.create(
                             'Item',
                             {
@@ -51,38 +53,77 @@ class RealmPersistInterface {
                             },
                             true
                         );
-                    }
-
+                    });
+                } catch (error) {
+                    reject(error);
+                }
+            }).catch((error) => {
+                try { 
+                    this.realm.create(
+                        'Item',
+                        {
+                            name: key,
+                            content: value,
+                        }
+                    );
+                } catch (error) {
+                    reject(error);
+                }
+            }).finally(() => {
+                resolve();
+                if (callback && typeof callback === 'function'){
                     callback();
-                });
+                }
             });
-        } catch (error) {
-            callback(error);
-        }
+        });
+        if (callback && typeof callback === 'function'){
+            promise.catch((error) => callback(error)};
+        });  
+        return promise;
     };
 
     removeItem = (key, callback) => {
-        try {
-            this.realm.write(() => {
-                const item = this.items.filtered(`name = "${key}"`);
-
-                this.realm.delete(item);
-            });
-        } catch (error) {
-            callback(error);
+        const promise = new Promise((reject, resolve) => {
+            try {
+                this.realm.write(() => {
+                    const item = this.items.filtered(`name = "${key}"`);
+                    this.realm.delete(item);
+                    resolve();
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
+        
+        if (callback && typeof callback === 'function') {
+            promise
+                .then((content) => callback(null, content))
+                .catch((e) => callback(e));
         }
+        
+        return promise;
     };
 
     getAllKeys = (callback) => {
-        try {
-            const keys = this.items.map(
-                (item) => item.name
-            );
+        const promise = new Promise((reject, resolve) => {
+            try {
+                const keys = this.items.map(
+                    (item) => item.name
+                );
 
-            callback(null, keys);
-        } catch (error) {
-            callback(error);
+                resolve(keys);
+            } catch (error) {
+                reject(error);
+            }
+        });
+        
+        if (callback && typeof callback === 'function') {
+            promise
+                .then((content) => callback(null, content))
+                .catch((e) => callback(e));
         }
+        
+        return promise;
     };
 }
 
